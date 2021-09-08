@@ -70,12 +70,12 @@ def Flatten(v,f):
     uv: np.array
     uv coordinates
     """
-    b = np.array([2, 1])
-    bnd = igl.boundary_loop(f)
+    b = np.array([2, 1]) # Fix two points on the boundary
+    bnd = igl.boundary_loop(f) # Compute ordered boundary loops for a manifold mesh and return the longest loop in terms of vertices.
     b[0] = bnd[0]
     b[1] = bnd[int(bnd.size / 2)]
     bc = np.array([[0.0, 0.0], [1.0, 0.0]])
-    ret,uv = igl.lscm(v, f, b, bc)
+    ret,uv = igl.lscm(v, f, b, bc) # LSCM parametrization
     return uv
 
 
@@ -106,30 +106,37 @@ def Flatten_inverse(uv_all, uv_landmark, vn):
     
     """
     
-    p,d = uv_landmark.shape
+    p,d = uv_landmark.shape # p the number of landmarks; d = 2
     
-    knn = NearestNeighbors(n_neighbors=2)
+    knn = NearestNeighbors(n_neighbors=2) # Use knn to find the nearest 3 points
     knn.fit(uv_all)
-    ind = knn.kneighbors(uv_landmark, 3, return_distance=False)
+    ind = knn.kneighbors(uv_landmark, 3, return_distance=False) # dim:(n,3)
     
     
-    uv_traingle = uv_all[ind]
-    vn_traingle = vn[ind]
+    uv_traingle = uv_all[ind] # dim: (100,3,2) the nearest traingle on uv
+    vn_traingle = vn[ind] # dim: (100,3,3) the nearest traingle on 3d mesh
     
     
     
-    m1 = uv_traingle[:,1] - uv_traingle[:,0]
-    m2 = uv_traingle[:,2] - uv_traingle[:,0]
+    m1 = uv_traingle[:,1] - uv_traingle[:,0] # (u_2,v_2)-(u_1,v_1) the length of one side; dim: (100,2) 
+    m2 = uv_traingle[:,2] - uv_traingle[:,0] # (u_3,v_3)-(u_1,v_1) the length of one side; dim: (100,2) 
     
-    a = np.vstack([m1,m2]).T
-    a[:,[1,2]] = a[:,[2,1]]
+    a = np.hstack([m1,m2])
+
 
     M = a.reshape(p,2,2)
-    inv = np.linalg.pinv(M)
+    M = M.transpose((0,2,1)) # traspose each matrix; dim(100,2,2); M = (m1.T m2.T)
     
+    inv = np.linalg.inv(M)
     
-    lam = inv@((uv_landmark - uv_traingle[:,0]).reshape(p,2,1))
+    # find the affine coordinates corresponding to the point
+    # (lambda_1 lambda_2).T = M^(-1) * (u-u_1 v-v_1).T
+    # (u v) is the uv coordinate of the landmarks
+    # (u_1 v_1) is the uv coordinate of a points of the uv traingle which that landmark inside
+    lam = inv@((uv_landmark - uv_traingle[:,0]).reshape(p,2,1)) 
     
+    # vertex = (1-lambda_1-lambda_2) * v1 + lambda_1 * v2 + lambda_2 * v3
+    # v1,v2,v3 are the coordinates of the respective triangle vertices
     vertex = (1-lam[:,0]-lam[:,1])*vn_traingle[:,0]+lam[:,0]*vn_traingle[:,1]+lam[:,1]*vn_traingle[:,2]
 
     return vertex
@@ -202,15 +209,17 @@ def spline_image_to_uv(v,uv,point2d,point3d,image_points):
     the corresponding uv of the image_points  
     """
     
-    point3d = np.round(point3d,6)
+    # We use blender to output the 3d landmarks coordinates and blender round to the 8 decimal place
+    # We use libigl to output the whole vertex coordinates and it round to the 6 decimal place
+    
+    point3d = np.round(point3d,6) # round the landmarks from blender to 6 decimal place
     a = point3d[:,0]
     b = v[:,0]
     
-    ind = np.in1d(b,a).nonzero()[0]
-    ind2 = np.in1d(a,v[ind,0]).nonzero()[0]
+    ind = np.in1d(b,a).nonzero()[0] # find the index of landmarks in the whole patch 
 
-    y = uv[ind]
-    x = point2d[ind2]
+    y = uv[ind] # find the uv coordinates corresponding to the landmarks
+    x = point2d
     
     a = TPS.deform(image_points, x, y)
     

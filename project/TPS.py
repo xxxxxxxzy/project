@@ -29,9 +29,12 @@ def data(X,Y,n,i):
     Divide the data set into training set and test set.
     """
     
-    p, d = X.shape #p = 60, d = 2
+    p, d = X.shape #p = n, d = 2
+    
+    # We want to registration from 2d to 3d, so we add 0 to 2d like (x,y,0)
     z = np.zeros(p)
     X = np.c_[X,z.T]
+    
     P = (p-n)/p
     
     X_train,X_test, Y_train, Y_test = train_test_split(X,Y,test_size=P, random_state=i, shuffle=True)
